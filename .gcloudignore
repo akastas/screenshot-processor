@@ -1,0 +1,10 @@
+# Ignore spec, scripts, and local dev files during deployment
+Screenshot Processor GCP.md
+scripts/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+deploy.sh
+README.md
+tests/
