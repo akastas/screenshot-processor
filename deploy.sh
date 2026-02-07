@@ -11,10 +11,10 @@
 set -euo pipefail
 
 # --- Configuration ---
-PROJECT_ID="${GCP_PROJECT_ID:-screenshot-processor}"
+PROJECT_ID="${GCP_PROJECT_ID:-screenshot-processor-ak}"
 REGION="${GCP_LOCATION:-europe-west1}"
 FUNCTION_NAME="screenshot-processor"
-SA_EMAIL="${SA_EMAIL:-screenshot-processor@${PROJECT_ID}.iam.gserviceaccount.com}"
+SA_EMAIL="${SA_EMAIL:-screenshot-processor@screenshot-processor-ak.iam.gserviceaccount.com}"
 MEMORY="512MB"
 TIMEOUT="300s"
 SCHEDULE="*/5 * * * *"  # Every 5 minutes
@@ -49,7 +49,7 @@ gcloud functions deploy "$FUNCTION_NAME" \
     --memory "$MEMORY" \
     --timeout "$TIMEOUT" \
     --service-account "$SA_EMAIL" \
-    --set-env-vars "GCP_PROJECT_ID=$PROJECT_ID,GCP_LOCATION=$REGION" \
+    --set-env-vars "GCP_PROJECT_ID=$PROJECT_ID,GCP_LOCATION=$REGION,DRIVE_INBOX_FOLDER_ID=1xHPRq1MR2JmQN-f0fnVKOHS-edIsLZoB,DRIVE_ARCHIVE_FOLDER_ID=1jHz-UP3-YQ8a5bn__E6UkHo8ylv6rdjj,DRIVE_VAULT_ROOT_FOLDER_ID=1VKCaMxB639IyfwDHIvZPE4YzhZheTpuq" \
     --project "$PROJECT_ID" \
     --quiet
 

@@ -9,7 +9,7 @@ from google.cloud import secretmanager
 # ---------------------------------------------------------------------------
 # GCP Project
 # ---------------------------------------------------------------------------
-GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "screenshot-processor")
+GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "screenshot-processor-ak")
 GCP_LOCATION = os.environ.get("GCP_LOCATION", "europe-west1")
 
 # ---------------------------------------------------------------------------
@@ -22,9 +22,9 @@ GEMINI_MODEL = os.environ.get(
 # ---------------------------------------------------------------------------
 # Google Drive — Folder IDs (set via env vars or override here after setup)
 # ---------------------------------------------------------------------------
-DRIVE_INBOX_FOLDER_ID = os.environ.get("DRIVE_INBOX_FOLDER_ID", "")
-DRIVE_ARCHIVE_FOLDER_ID = os.environ.get("DRIVE_ARCHIVE_FOLDER_ID", "")
-DRIVE_VAULT_ROOT_FOLDER_ID = os.environ.get("DRIVE_VAULT_ROOT_FOLDER_ID", "")
+DRIVE_INBOX_FOLDER_ID = os.environ.get("DRIVE_INBOX_FOLDER_ID", "1xHPRq1MR2JmQN-f0fnVKOHS-edIsLZoB")
+DRIVE_ARCHIVE_FOLDER_ID = os.environ.get("DRIVE_ARCHIVE_FOLDER_ID", "1jHz-UP3-YQ8a5bn__E6UkHo8ylv6rdjj")
+DRIVE_VAULT_ROOT_FOLDER_ID = os.environ.get("DRIVE_VAULT_ROOT_FOLDER_ID", "1VKCaMxB639IyfwDHIvZPE4YzhZheTpuq")
 
 # Image file extensions to process
 IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "heic", "heif", "bmp", "gif"}
