@@ -82,11 +82,11 @@ TICKTICK_API_BASE = "https://api.ticktick.com/open/v1"
 
 # ---------------------------------------------------------------------------
 # OAuth2 User Credentials (for Drive file creation as akastas@gmail.com)
-# These are Secret Manager secret IDs, not the values themselves.
+# Passed as environment variables to avoid Secret Manager permission issues.
 # ---------------------------------------------------------------------------
-OAUTH_CLIENT_ID_SECRET = "oauth-client-id"
-OAUTH_CLIENT_SECRET_SECRET = "oauth-client-secret"
-OAUTH_REFRESH_TOKEN_SECRET = "oauth-refresh-token"
+OAUTH_CLIENT_ID = os.environ.get("OAUTH_CLIENT_ID", "")
+OAUTH_CLIENT_SECRET = os.environ.get("OAUTH_CLIENT_SECRET", "")
+OAUTH_REFRESH_TOKEN = os.environ.get("OAUTH_REFRESH_TOKEN", "")
 
 # ---------------------------------------------------------------------------
 # Daily note template

@@ -37,7 +37,22 @@ gcloud services enable \
     --project "$PROJECT_ID" \
     --quiet
 
-# --- Step 2: Deploy Cloud Function ---
+# --- Load secrets from .env.deploy if it exists ---
+if [[ -f .env.deploy ]]; then
+    echo ">>> Loading secrets from .env.deploy..."
+    source .env.deploy
+fi
+
+# Validate OAuth credentials
+if [[ -z "$OAUTH_CLIENT_ID" || -z "$OAUTH_CLIENT_SECRET" || -z "$OAUTH_REFRESH_TOKEN" ]]; then
+    echo "ERROR: OAuth credentials not set."
+    echo "Create a .env.deploy file with:"
+    echo "  export OAUTH_CLIENT_ID=your-client-id"
+    echo "  export OAUTH_CLIENT_SECRET=your-client-secret"
+    echo "  export OAUTH_REFRESH_TOKEN=your-refresh-token"
+    exit 1
+fi
+
 echo ""
 echo ">>> Deploying Cloud Function..."
 gcloud functions deploy "$FUNCTION_NAME" \
@@ -49,7 +64,7 @@ gcloud functions deploy "$FUNCTION_NAME" \
     --memory "$MEMORY" \
     --timeout "$TIMEOUT" \
     --service-account "$SA_EMAIL" \
-    --set-env-vars "GCP_PROJECT_ID=$PROJECT_ID,GCP_LOCATION=$REGION,DRIVE_INBOX_FOLDER_ID=1xHPRq1MR2JmQN-f0fnVKOHS-edIsLZoB,DRIVE_ARCHIVE_FOLDER_ID=1jHz-UP3-YQ8a5bn__E6UkHo8ylv6rdjj,DRIVE_VAULT_ROOT_FOLDER_ID=1VKCaMxB639IyfwDHIvZPE4YzhZheTpuq" \
+    --set-env-vars "GCP_PROJECT_ID=$PROJECT_ID,GCP_LOCATION=$REGION,DRIVE_INBOX_FOLDER_ID=1xHPRq1MR2JmQN-f0fnVKOHS-edIsLZoB,DRIVE_ARCHIVE_FOLDER_ID=1jHz-UP3-YQ8a5bn__E6UkHo8ylv6rdjj,DRIVE_VAULT_ROOT_FOLDER_ID=1VKCaMxB639IyfwDHIvZPE4YzhZheTpuq,OAUTH_CLIENT_ID=$OAUTH_CLIENT_ID,OAUTH_CLIENT_SECRET=$OAUTH_CLIENT_SECRET,OAUTH_REFRESH_TOKEN=$OAUTH_REFRESH_TOKEN" \
     --project "$PROJECT_ID" \
     --quiet
 

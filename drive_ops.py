@@ -23,10 +23,9 @@ from config import (
     DAILY_NOTES_FOLDER,
     DAILY_NOTE_TEMPLATE,
     IMAGE_EXTENSIONS,
-    OAUTH_CLIENT_ID_SECRET,
-    OAUTH_CLIENT_SECRET_SECRET,
-    OAUTH_REFRESH_TOKEN_SECRET,
-    get_secret,
+    OAUTH_CLIENT_ID,
+    OAUTH_CLIENT_SECRET,
+    OAUTH_REFRESH_TOKEN,
 )
 
 logger = logging.getLogger(__name__)
@@ -56,9 +55,15 @@ def _get_user_service():
     """
     global _user_service
     if _user_service is None:
-        client_id = get_secret(OAUTH_CLIENT_ID_SECRET)
-        client_secret = get_secret(OAUTH_CLIENT_SECRET_SECRET)
-        refresh_token = get_secret(OAUTH_REFRESH_TOKEN_SECRET)
+        client_id = OAUTH_CLIENT_ID
+        client_secret = OAUTH_CLIENT_SECRET
+        refresh_token = OAUTH_REFRESH_TOKEN
+
+        if not all([client_id, client_secret, refresh_token]):
+            raise RuntimeError(
+                "OAuth2 credentials not configured. Set OAUTH_CLIENT_ID, "
+                "OAUTH_CLIENT_SECRET, and OAUTH_REFRESH_TOKEN env vars."
+            )
 
         credentials = UserCredentials(
             token=None,
