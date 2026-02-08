@@ -26,6 +26,9 @@ from config import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Max screenshots to process per invocation (avoids Cloud Function timeout)
+BATCH_SIZE = 15
+
 
 @functions_framework.http
 def process_screenshots(request):
@@ -44,10 +47,12 @@ def process_screenshots(request):
             logger.info("No images found in inbox. Nothing to do.")
             return json.dumps({"status": "ok", "message": "No images to process"}), 200
 
-        logger.info("Found %d image(s) to process", len(images))
+        total_found = len(images)
+        batch = images[:BATCH_SIZE]
+        logger.info("Found %d image(s) in inbox, processing batch of %d", total_found, len(batch))
 
-        # 2. Process each image
-        for image_info in images:
+        # 2. Process each image (batched)
+        for image_info in batch:
             file_id = image_info["id"]
             filename = image_info["name"]
             mime_type = image_info.get("mimeType", "image/png")
