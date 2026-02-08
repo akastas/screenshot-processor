@@ -81,6 +81,14 @@ TICKTICK_PRIORITY_MAP = {
 TICKTICK_API_BASE = "https://api.ticktick.com/open/v1"
 
 # ---------------------------------------------------------------------------
+# OAuth2 User Credentials (for Drive file creation as akastas@gmail.com)
+# These are Secret Manager secret IDs, not the values themselves.
+# ---------------------------------------------------------------------------
+OAUTH_CLIENT_ID_SECRET = "oauth-client-id"
+OAUTH_CLIENT_SECRET_SECRET = "oauth-client-secret"
+OAUTH_REFRESH_TOKEN_SECRET = "oauth-refresh-token"
+
+# ---------------------------------------------------------------------------
 # Daily note template
 # ---------------------------------------------------------------------------
 DAILY_NOTE_TEMPLATE = """---

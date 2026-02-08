@@ -1,6 +1,7 @@
 """
 Screenshot Processor — Google Drive Operations
-Uses a service account for auth (credentials picked up automatically in Cloud Functions).
+Uses a service account for reads/moves/renames.
+Uses OAuth2 user credentials (akastas@gmail.com) for file creation.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from typing import Optional
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 import google.auth
+from google.oauth2.credentials import Credentials as UserCredentials
 
 from config import (
     DRIVE_INBOX_FOLDER_ID,
@@ -21,6 +23,10 @@ from config import (
     DAILY_NOTES_FOLDER,
     DAILY_NOTE_TEMPLATE,
     IMAGE_EXTENSIONS,
+    OAUTH_CLIENT_ID_SECRET,
+    OAUTH_CLIENT_SECRET_SECRET,
+    OAUTH_REFRESH_TOKEN_SECRET,
+    get_secret,
 )
 
 logger = logging.getLogger(__name__)
@@ -29,10 +35,11 @@ logger = logging.getLogger(__name__)
 # Service initialization
 # ---------------------------------------------------------------------------
 _service = None
+_user_service = None
 
 
 def _get_service():
-    """Lazy-init the Drive API service (reused across calls in one invocation)."""
+    """Lazy-init the Drive API service using service account (for reads/moves/renames)."""
     global _service
     if _service is None:
         credentials, _ = google.auth.default(
@@ -40,6 +47,30 @@ def _get_service():
         )
         _service = build("drive", "v3", credentials=credentials, cache_discovery=False)
     return _service
+
+
+def _get_user_service():
+    """
+    Lazy-init the Drive API service using OAuth2 user credentials.
+    Used for file creation (requires storage quota from a real user account).
+    """
+    global _user_service
+    if _user_service is None:
+        client_id = get_secret(OAUTH_CLIENT_ID_SECRET)
+        client_secret = get_secret(OAUTH_CLIENT_SECRET_SECRET)
+        refresh_token = get_secret(OAUTH_REFRESH_TOKEN_SECRET)
+
+        credentials = UserCredentials(
+            token=None,
+            refresh_token=refresh_token,
+            client_id=client_id,
+            client_secret=client_secret,
+            token_uri="https://oauth2.googleapis.com/token",
+            scopes=["https://www.googleapis.com/auth/drive"],
+        )
+        _user_service = build("drive", "v3", credentials=credentials, cache_discovery=False)
+        logger.info("Initialized OAuth2 user-credentials Drive service")
+    return _user_service
 
 
 # ---------------------------------------------------------------------------
@@ -197,9 +228,10 @@ def append_to_md(file_id: str, new_content: str, under_heading: Optional[str] = 
 def create_md_file(folder_id: str, name: str, content: str) -> str:
     """
     Create a new .md file in the given Drive folder.
+    Uses OAuth2 user credentials so the file is owned by akastas@gmail.com.
     Returns the new file's ID.
     """
-    service = _get_service()
+    service = _get_user_service()
     file_metadata = {
         "name": name,
         "parents": [folder_id],
