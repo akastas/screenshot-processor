@@ -40,6 +40,9 @@ VAULT_PATHS = {
     "ideas":        "3-Resources/Ideas/Ideas.md",
     "references":   "3-Resources/References.md",
     "finances":     "2-Areas/Finances/Transactions.md",
+    "people":       "3-Resources/People/People.md",
+    "places":       "3-Resources/Places/Places.md",
+    "inspiration":  "3-Resources/Inspiration/Inspiration.md",
 }
 
 # ---------------------------------------------------------------------------
@@ -65,6 +68,15 @@ ROUTE_MAP = {
     },
     "FINANCE": {
         "extra_file": VAULT_PATHS["finances"],
+    },
+    "PERSON": {
+        "extra_file": VAULT_PATHS["people"],
+    },
+    "LOCATION": {
+        "extra_file": VAULT_PATHS["places"],
+    },
+    "INSPIRATION": {
+        "extra_file": VAULT_PATHS["inspiration"],
     },
 }
 

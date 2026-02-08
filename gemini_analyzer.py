@@ -20,16 +20,35 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Prompt
 # ---------------------------------------------------------------------------
-ANALYSIS_PROMPT = """You are a screenshot analysis assistant. Analyze the image with extreme precision.
+ANALYSIS_PROMPT = """You are a screenshot analysis assistant for a photographer's personal knowledge base.
 
-RULES:
-- Transcribe ALL visible text EXACTLY as written, word for word
+CORE RULES:
+- Transcribe ALL visible text EXACTLY as written in the "transcript" field
 - Support Russian, Greek, English, Italian, and any other language
-- Do NOT paraphrase or guess — copy text exactly
-- Categorize each piece of information
-- If the screenshot contains multiple distinct pieces of information, create separate items for each
+- Do NOT paraphrase or guess — copy text exactly in the transcript
+- CONSOLIDATE related information into ONE item. An Instagram profile = 1 PERSON, not 20 references
+- Maximum 5 items per screenshot. Merge related info into fewer, richer items
 - If you cannot determine a due date, set it to null
 - If you cannot determine priority, default to "medium"
+
+ITEM TYPES — choose the most specific one:
+- PERSON: Social media profiles, creators, photographers, models, artists, people to follow/contact
+- LOCATION: Places, cities, venues, travel destinations, shoot locations
+- INSPIRATION: Visual references, outfit ideas, mood/style screenshots, fashion, art, aesthetics
+- TASK: Action items, to-do items, reminders
+- EVENT: Calendar events, meetings, dates, appointments
+- IDEA: Thoughts, concepts, plans, brainstorming
+- DIARY: Personal reflections, journal entries
+- FINANCE: Receipts, prices, transactions, bills, credits
+- REFERENCE: Articles, links, general information that doesn't fit above categories
+
+CLASSIFICATION GUIDE:
+- Instagram/social profile screenshot → PERSON (one item with all profile info consolidated)
+- Photo of a person/model/outfit → INSPIRATION (describe the visual, style, mood)
+- Travel post or location photo → LOCATION
+- Screenshot of someone's work/portfolio → PERSON (if focus is the creator) or INSPIRATION (if focus is the visual)
+- Chat about travel plans → IDEA or LOCATION depending on content
+- GCP/billing screenshot → FINANCE
 
 Return ONLY valid JSON in this format:
 {
@@ -39,10 +58,16 @@ Return ONLY valid JSON in this format:
   "filename_suggestion": "2-4 words, lowercase, hyphens, no extension",
   "items": [
     {
-      "type": "TASK|EVENT|IDEA|DIARY|REFERENCE|FINANCE",
-      "content": "the extracted information, clean and readable",
+      "type": "TASK|EVENT|IDEA|DIARY|REFERENCE|FINANCE|PERSON|LOCATION|INSPIRATION",
+      "content": "clean, readable summary of this item",
       "priority": "high|medium|low",
-      "due_date": "YYYY-MM-DD if detected, null otherwise"
+      "due_date": "YYYY-MM-DD if detected, null otherwise",
+      "name": "person's name or place name (for PERSON/LOCATION, null otherwise)",
+      "handle": "social media handle like @username (for PERSON, null otherwise)",
+      "platform": "Instagram|Twitter|TikTok|Website|etc (for PERSON, null otherwise)",
+      "role": "photographer|model|creator|artist|designer|etc (for PERSON, null otherwise)",
+      "tags": ["style-tag-1", "style-tag-2"],
+      "location": "city, country (if known, null otherwise)"
     }
   ]
 }
@@ -132,7 +157,7 @@ def _validate_result(result: dict) -> None:
     if not isinstance(result["items"], list):
         raise ValueError("'items' must be a list")
 
-    valid_types = {"TASK", "EVENT", "IDEA", "DIARY", "REFERENCE", "FINANCE"}
+    valid_types = {"TASK", "EVENT", "IDEA", "DIARY", "REFERENCE", "FINANCE", "PERSON", "LOCATION", "INSPIRATION"}
     for i, item in enumerate(result["items"]):
         if "type" not in item or "content" not in item:
             raise ValueError(f"Item {i} missing 'type' or 'content'")

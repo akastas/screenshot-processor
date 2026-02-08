@@ -109,7 +109,13 @@ language: {analysis.get('language', 'unknown')}
         priority = item.get("priority", "medium")
         due = item.get("due_date", "")
         due_str = f" (due: {due})" if due else ""
-        content += f"- **[{item['type']}]** {item['content']} — _{priority}{due_str}_\n"
+        name = item.get("name", "")
+        name_str = f" — {name}" if name else ""
+        handle = item.get("handle", "")
+        handle_str = f" ({handle})" if handle else ""
+        tags = item.get("tags", [])
+        tags_str = f" [{', '.join(tags)}]" if tags else ""
+        content += f"- **[{item['type']}]** {item['content']}{name_str}{handle_str}{tags_str} — _{priority}{due_str}_\n"
 
     file_id = drive_ops.create_md_file(archive_folder_id, record_name, content)
     return file_id
@@ -124,6 +130,7 @@ def _format_item(item: dict, source_filename: str, summary: str) -> str:
     content = item["content"]
     priority = item.get("priority", "medium")
     due_date = item.get("due_date")
+    today = date.today().isoformat()
 
     lines = []
 
@@ -132,8 +139,55 @@ def _format_item(item: dict, source_filename: str, summary: str) -> str:
         due_str = f" 📅 {due_date}" if due_date else ""
         priority_emoji = {"high": "🔺", "medium": "🔸", "low": "🔹"}.get(priority, "")
         lines.append(f"- [ ] {priority_emoji} {content}{due_str}")
+
+    elif item_type == "PERSON":
+        name = item.get("name") or content.split("—")[0].strip()
+        handle = item.get("handle") or ""
+        platform = item.get("platform") or ""
+        role = item.get("role") or "unknown"
+        tags = item.get("tags") or []
+        location = item.get("location") or ""
+
+        lines.append(f"### {name}")
+        if handle:
+            lines.append(f"- **Handle:** {handle}")
+        if platform:
+            lines.append(f"- **Platform:** {platform}")
+        lines.append(f"- **Role:** {role}")
+        if tags:
+            tag_str = ", ".join(tags)
+            lines.append(f"- **Tags:** {tag_str}")
+        if location:
+            lines.append(f"- **Location:** {location}")
+        lines.append(f"- **Notes:** {content}")
+        lines.append(f"- **Added:** {today}")
+
+    elif item_type == "LOCATION":
+        name = item.get("name") or content.split("—")[0].strip()
+        location = item.get("location") or ""
+        tags = item.get("tags") or []
+
+        lines.append(f"### {name}")
+        if location:
+            lines.append(f"- **Location:** {location}")
+        if tags:
+            tag_str = ", ".join(tags)
+            lines.append(f"- **Type:** {tag_str}")
+        lines.append(f"- **Notes:** {content}")
+        lines.append(f"- **Added:** {today}")
+
+    elif item_type == "INSPIRATION":
+        tags = item.get("tags") or []
+
+        lines.append(f"### {content[:80]}")
+        if tags:
+            tag_str = ", ".join(tags)
+            lines.append(f"- **Style:** {tag_str}")
+        lines.append(f"- **Notes:** {content}")
+        lines.append(f"- **Added:** {today}")
+
     elif item_type == "FINANCE":
-        lines.append(f"| {date.today().isoformat()} | {content} | `screenshot` |")
+        lines.append(f"| {today} | {content} | `screenshot` |")
     else:
         lines.append(f"- {content}")
 
