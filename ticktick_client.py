@@ -167,7 +167,11 @@ def create_task(item: dict[str, Any], source_filename: str) -> Optional[str]:
             json=task_body,
             timeout=10,
         )
-        resp.raise_for_status()
+        if resp.status_code != 200:
+            logger.error(
+                "TickTick API returned %d: %s", resp.status_code, resp.text[:500]
+            )
+            resp.raise_for_status()
         result = resp.json()
         task_id = result.get("id", "unknown")
         project_name = project_hint or "Inbox"
@@ -176,6 +180,8 @@ def create_task(item: dict[str, Any], source_filename: str) -> Optional[str]:
             content[:50], project_name, task_id,
         )
         return task_id
+    except requests.exceptions.HTTPError:
+        return None  # already logged above
     except Exception as e:
         logger.error("Failed to create TickTick task: %s", e)
         return None

@@ -96,15 +96,31 @@ def route_items(
                 logger.info("Booking processed: %s", booking_result.get("client_file"))
 
                 # Also create a TickTick task for the follow-up
-                if ticktick_client.is_configured() and item.get("status") == "need-to-reply":
+                if ticktick_client.is_configured():
                     client_name = item.get("name") or "Client"
                     platform = item.get("platform") or ""
+                    status = item.get("status", "need-to-reply")
+
+                    # Status-specific task title
+                    if status == "need-to-reply":
+                        task_title = f"Reply to {client_name} — {platform}"
+                        priority = "high"
+                    elif status == "waiting":
+                        task_title = f"Follow up with {client_name} — {platform}"
+                        priority = "medium"
+                    elif status == "confirmed":
+                        task_title = f"Prepare shoot for {client_name} — {platform}"
+                        priority = "high"
+                    else:
+                        task_title = f"Booking: {client_name} — {platform}"
+                        priority = "medium"
+
                     follow_up = {
-                        "content": f"Reply to {client_name} — {platform}",
-                        "priority": "high",
-                        "due_date": None,
+                        "content": task_title,
+                        "priority": priority,
+                        "due_date": item.get("due_date"),
                         "project_hint": "Photography",
-                        "tags": ["booking", "reply"],
+                        "tags": ["booking"],
                     }
                     ticktick_client.create_task(follow_up, source_filename)
             except Exception as e:
