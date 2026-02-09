@@ -15,7 +15,6 @@ import functions_framework
 import drive_ops
 import gemini_analyzer
 import markdown_router
-import ticktick_client
 from config import (
     DRIVE_INBOX_FOLDER_ID,
     DRIVE_ARCHIVE_FOLDER_ID,
@@ -97,33 +96,22 @@ def _process_single(file_id: str, filename: str, mime_type: str) -> dict:
     analysis = gemini_analyzer.analyze_image(image_bytes, mime_type)
     logger.info("Analysis: %s", analysis.get("summary", ""))
 
-    # 3. Route items to Obsidian vault files
+    # 3. Route items to Obsidian vault files (also handles TickTick + bookings)
     today = date.today()
     counts = markdown_router.route_items(analysis, filename, today)
 
-    # 4. Create TickTick tasks for TASK items
-    ticktick_results = []
-    task_items = [item for item in analysis.get("items", []) if item.get("type") == "TASK"]
-    if task_items:
-        try:
-            ticktick_results = ticktick_client.create_tasks_from_items(
-                analysis["items"], filename
-            )
-        except Exception as e:
-            logger.error("TickTick integration failed: %s", e)
-
-    # 5. Create analysis record in archive
+    # 4. Create analysis record in archive
     analysis_file_id = markdown_router.create_analysis_record(
         analysis, filename, DRIVE_ARCHIVE_FOLDER_ID
     )
 
-    # 6. Rename the screenshot with a descriptive name
+    # 5. Rename the screenshot with a descriptive name
     suggested = analysis.get("filename_suggestion", "screenshot")
     ext = filename.rsplit(".", 1)[-1] if "." in filename else "png"
     new_name = f"{today.isoformat()}-{suggested}.{ext}"
     drive_ops.rename_file(file_id, new_name)
 
-    # 7. Move original screenshot to archive
+    # 6. Move original screenshot to archive
     drive_ops.move_file(file_id, DRIVE_ARCHIVE_FOLDER_ID)
 
     result = {
@@ -131,7 +119,7 @@ def _process_single(file_id: str, filename: str, mime_type: str) -> dict:
         "new_name": new_name,
         "summary": analysis.get("summary", ""),
         "items_routed": counts,
-        "ticktick_tasks_created": len(ticktick_results),
     }
     logger.info("--- Done: %s → %s ---", filename, new_name)
     return result
+
