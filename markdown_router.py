@@ -79,21 +79,26 @@ def route_items(
         # 3) Create TickTick task for TASK items
         if item_type == "TASK" and ticktick_client.is_configured():
             try:
+                print(f"  TickTick: creating task for '{item.get('content', '')[:50]}'", flush=True)
                 task_id = ticktick_client.create_task(item, source_filename)
                 if task_id:
                     project_name = item.get("project_hint", "Inbox")
-                    logger.info("Created TickTick task (project=%s)", project_name)
+                    print(f"  TickTick: ✅ task created (project={project_name}, id={task_id})", flush=True)
+                else:
+                    print("  TickTick: ❌ task creation returned None", flush=True)
             except Exception as e:
+                print(f"  TickTick ERROR: {e}", flush=True)
                 logger.error("Failed to create TickTick task: %s", e)
 
         # 4) Handle BOOKING items — create/update client file + suggest reply
         if route.get("booking"):
             try:
+                print(f"  Booking: processing for '{item.get('name', '?')}' ({item.get('status', '?')})", flush=True)
                 transcript = analysis.get("transcript", "")
                 booking_result = booking_manager.handle_booking(
                     item, source_filename, transcript, today
                 )
-                logger.info("Booking processed: %s", booking_result.get("client_file"))
+                print(f"  Booking: {booking_result.get('client_file', '?')}", flush=True)
 
                 # Also create a TickTick task for the follow-up
                 if ticktick_client.is_configured():
@@ -122,8 +127,13 @@ def route_items(
                         "project_hint": "Photography",
                         "tags": ["booking"],
                     }
-                    ticktick_client.create_task(follow_up, source_filename)
+                    print(f"  TickTick booking: creating '{task_title}'", flush=True)
+                    tt_id = ticktick_client.create_task(follow_up, source_filename)
+                    print(f"  TickTick booking: {'✅ ' + str(tt_id) if tt_id else '❌ failed'}", flush=True)
+                else:
+                    print("  TickTick: not configured, skipping booking task", flush=True)
             except Exception as e:
+                print(f"  Booking ERROR: {e}", flush=True)
                 logger.error("Failed to handle booking: %s", e)
 
         counts[item_type] = counts.get(item_type, 0) + 1
