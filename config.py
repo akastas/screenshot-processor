@@ -43,6 +43,9 @@ VAULT_PATHS = {
     "people":       "3-Resources/People/People.md",
     "places":       "3-Resources/Places/Places.md",
     "inspiration":  "3-Resources/Inspiration/Inspiration.md",
+    "quotes":       "3-Resources/Quotes/Quotes.md",
+    "learning":     "3-Resources/Learning/Learning.md",
+    "wishlist":     "3-Resources/Wishlist/Wishlist.md",
 }
 
 # ---------------------------------------------------------------------------
@@ -78,6 +81,15 @@ ROUTE_MAP = {
     "INSPIRATION": {
         "extra_file": VAULT_PATHS["inspiration"],
     },
+    "QUOTE": {
+        "extra_file": VAULT_PATHS["quotes"],
+    },
+    "LEARNING": {
+        "extra_file": VAULT_PATHS["learning"],
+    },
+    "WISHLIST": {
+        "extra_file": VAULT_PATHS["wishlist"],
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -99,6 +111,13 @@ TICKTICK_API_BASE = "https://api.ticktick.com/open/v1"
 OAUTH_CLIENT_ID = os.environ.get("OAUTH_CLIENT_ID", "")
 OAUTH_CLIENT_SECRET = os.environ.get("OAUTH_CLIENT_SECRET", "")
 OAUTH_REFRESH_TOKEN = os.environ.get("OAUTH_REFRESH_TOKEN", "")
+
+# ---------------------------------------------------------------------------
+# TickTick API credentials (OAuth2)
+# ---------------------------------------------------------------------------
+TICKTICK_CLIENT_ID = os.environ.get("TICKTICK_CLIENT_ID", "")
+TICKTICK_CLIENT_SECRET = os.environ.get("TICKTICK_CLIENT_SECRET", "")
+TICKTICK_ACCESS_TOKEN = os.environ.get("TICKTICK_ACCESS_TOKEN", "")
 
 # ---------------------------------------------------------------------------
 # Daily note template

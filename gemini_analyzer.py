@@ -32,13 +32,16 @@ CORE RULES:
 - If you cannot determine priority, default to "medium"
 
 ITEM TYPES — choose the most specific one:
-- PERSON: Social media profiles, creators, photographers, models, artists, people to follow/contact
-- LOCATION: Places, cities, venues, travel destinations, shoot locations
-- INSPIRATION: Visual references, outfit ideas, mood/style screenshots, fashion, art, aesthetics
 - TASK: Action items, to-do items, reminders
 - EVENT: Calendar events, meetings, dates, appointments
 - IDEA: Thoughts, concepts, plans, brainstorming
 - DIARY: Personal reflections, journal entries
+- PERSON: Social media profiles, creators, photographers, models, artists, people to follow/contact
+- LOCATION: Places, cities, venues, travel destinations, shoot locations
+- INSPIRATION: Visual references, outfit ideas, mood/style screenshots, fashion, art, aesthetics
+- QUOTE: Motivational quotes, wisdom, song lyrics, memorable phrases, speeches
+- LEARNING: Courses, tutorials, workshops, how-to content, educational material
+- WISHLIST: Products to buy, gear, gadgets, equipment, items of interest
 - FINANCE: Receipts, prices, transactions, bills, credits
 - REFERENCE: Articles, links, general information that doesn't fit above categories
 
@@ -49,6 +52,10 @@ CLASSIFICATION GUIDE:
 - Screenshot of someone's work/portfolio → PERSON (if focus is the creator) or INSPIRATION (if focus is the visual)
 - Chat about travel plans → IDEA or LOCATION depending on content
 - GCP/billing screenshot → FINANCE
+- Motivational speech, book quote → QUOTE
+- Online course, tutorial page → LEARNING
+- Product page, gear review → WISHLIST
+- For TASK items: also suggest a project category in project_hint (e.g. "Photography", "Personal", "Work", "Travel", "Health")
 
 Return ONLY valid JSON in this format:
 {
@@ -58,7 +65,7 @@ Return ONLY valid JSON in this format:
   "filename_suggestion": "2-4 words, lowercase, hyphens, no extension",
   "items": [
     {
-      "type": "TASK|EVENT|IDEA|DIARY|REFERENCE|FINANCE|PERSON|LOCATION|INSPIRATION",
+      "type": "TASK|EVENT|IDEA|DIARY|REFERENCE|FINANCE|PERSON|LOCATION|INSPIRATION|QUOTE|LEARNING|WISHLIST",
       "content": "clean, readable summary of this item",
       "priority": "high|medium|low",
       "due_date": "YYYY-MM-DD if detected, null otherwise",
@@ -67,7 +74,8 @@ Return ONLY valid JSON in this format:
       "platform": "Instagram|Twitter|TikTok|Website|etc (for PERSON, null otherwise)",
       "role": "photographer|model|creator|artist|designer|etc (for PERSON, null otherwise)",
       "tags": ["style-tag-1", "style-tag-2"],
-      "location": "city, country (if known, null otherwise)"
+      "location": "city, country (if known, null otherwise)",
+      "project_hint": "Photography|Personal|Work|Travel|Health (for TASK only, null otherwise)"
     }
   ]
 }
@@ -157,7 +165,9 @@ def _validate_result(result: dict) -> None:
     if not isinstance(result["items"], list):
         raise ValueError("'items' must be a list")
 
-    valid_types = {"TASK", "EVENT", "IDEA", "DIARY", "REFERENCE", "FINANCE", "PERSON", "LOCATION", "INSPIRATION"}
+    valid_types = {"TASK", "EVENT", "IDEA", "DIARY", "REFERENCE", "FINANCE",
+                   "PERSON", "LOCATION", "INSPIRATION",
+                   "QUOTE", "LEARNING", "WISHLIST"}
     for i, item in enumerate(result["items"]):
         if "type" not in item or "content" not in item:
             raise ValueError(f"Item {i} missing 'type' or 'content'")

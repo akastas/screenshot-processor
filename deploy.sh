@@ -53,6 +53,16 @@ if [[ -z "$OAUTH_CLIENT_ID" || -z "$OAUTH_CLIENT_SECRET" || -z "$OAUTH_REFRESH_T
     exit 1
 fi
 
+# TickTick credentials (optional — system works without them)
+if [[ -z "${TICKTICK_ACCESS_TOKEN:-}" ]]; then
+    echo "WARNING: TICKTICK_ACCESS_TOKEN not set. Tasks won't be created in TickTick."
+    echo "Run: python scripts/get_ticktick_token.py to get a token."
+    TICKTICK_ENV_VARS=""
+else
+    TICKTICK_ENV_VARS=",TICKTICK_CLIENT_ID=${TICKTICK_CLIENT_ID:-},TICKTICK_CLIENT_SECRET=${TICKTICK_CLIENT_SECRET:-},TICKTICK_ACCESS_TOKEN=$TICKTICK_ACCESS_TOKEN"
+    echo "TickTick: Configured ✅"
+fi
+
 echo ""
 echo ">>> Deploying Cloud Function..."
 gcloud functions deploy "$FUNCTION_NAME" \
@@ -64,7 +74,7 @@ gcloud functions deploy "$FUNCTION_NAME" \
     --memory "$MEMORY" \
     --timeout "$TIMEOUT" \
     --service-account "$SA_EMAIL" \
-    --set-env-vars "GCP_PROJECT_ID=$PROJECT_ID,GCP_LOCATION=$REGION,DRIVE_INBOX_FOLDER_ID=1xHPRq1MR2JmQN-f0fnVKOHS-edIsLZoB,DRIVE_ARCHIVE_FOLDER_ID=1jHz-UP3-YQ8a5bn__E6UkHo8ylv6rdjj,DRIVE_VAULT_ROOT_FOLDER_ID=1VKCaMxB639IyfwDHIvZPE4YzhZheTpuq,OAUTH_CLIENT_ID=$OAUTH_CLIENT_ID,OAUTH_CLIENT_SECRET=$OAUTH_CLIENT_SECRET,OAUTH_REFRESH_TOKEN=$OAUTH_REFRESH_TOKEN" \
+    --set-env-vars "GCP_PROJECT_ID=$PROJECT_ID,GCP_LOCATION=$REGION,DRIVE_INBOX_FOLDER_ID=1xHPRq1MR2JmQN-f0fnVKOHS-edIsLZoB,DRIVE_ARCHIVE_FOLDER_ID=1jHz-UP3-YQ8a5bn__E6UkHo8ylv6rdjj,DRIVE_VAULT_ROOT_FOLDER_ID=1VKCaMxB639IyfwDHIvZPE4YzhZheTpuq,OAUTH_CLIENT_ID=$OAUTH_CLIENT_ID,OAUTH_CLIENT_SECRET=$OAUTH_CLIENT_SECRET,OAUTH_REFRESH_TOKEN=$OAUTH_REFRESH_TOKEN$TICKTICK_ENV_VARS" \
     --project "$PROJECT_ID" \
     --quiet
 

@@ -10,6 +10,7 @@ from datetime import date, datetime
 from typing import Any, Optional
 
 import drive_ops
+import ticktick_client
 from config import ROUTE_MAP, DRIVE_VAULT_ROOT_FOLDER_ID
 
 logger = logging.getLogger(__name__)
@@ -73,6 +74,16 @@ def route_items(
                 _append_to_vault_file(extra_path, content_block, today)
             except Exception as e:
                 logger.error("Failed to append to %s: %s", extra_path, e)
+
+        # 3) Create TickTick task for TASK items
+        if item_type == "TASK" and ticktick_client.is_configured():
+            try:
+                task_id = ticktick_client.create_task(item, source_filename)
+                if task_id:
+                    project_name = item.get("project_hint", "Inbox")
+                    logger.info("Created TickTick task (project=%s)", project_name)
+            except Exception as e:
+                logger.error("Failed to create TickTick task: %s", e)
 
         counts[item_type] = counts.get(item_type, 0) + 1
 
@@ -183,6 +194,41 @@ def _format_item(item: dict, source_filename: str, summary: str) -> str:
         if tags:
             tag_str = ", ".join(tags)
             lines.append(f"- **Style:** {tag_str}")
+        lines.append(f"- **Notes:** {content}")
+        lines.append(f"- **Added:** {today}")
+
+    elif item_type == "QUOTE":
+        lines.append(f"### {content[:80]}")
+        name = item.get("name") or ""
+        if name:
+            lines.append(f"- **Author:** {name}")
+        tags = item.get("tags") or []
+        if tags:
+            lines.append(f"- **Tags:** {', '.join(tags)}")
+        lines.append(f"- **Added:** {today}")
+
+    elif item_type == "LEARNING":
+        name = item.get("name") or content[:60]
+        platform = item.get("platform") or ""
+        tags = item.get("tags") or []
+
+        lines.append(f"### {name}")
+        if platform:
+            lines.append(f"- **Platform:** {platform}")
+        handle = item.get("handle") or ""
+        if handle:
+            lines.append(f"- **Instructor:** {handle}")
+        if tags:
+            lines.append(f"- **Topics:** {', '.join(tags)}")
+        lines.append(f"- **Notes:** {content}")
+        lines.append(f"- **Added:** {today}")
+
+    elif item_type == "WISHLIST":
+        lines.append(f"### {content[:80]}")
+        tags = item.get("tags") or []
+        if tags:
+            lines.append(f"- **Category:** {', '.join(tags)}")
+        lines.append(f"- **Status:** 🔲 want")
         lines.append(f"- **Notes:** {content}")
         lines.append(f"- **Added:** {today}")
 
