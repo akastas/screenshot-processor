@@ -81,6 +81,46 @@ def _get_user_service():
 # ---------------------------------------------------------------------------
 # List / query helpers
 # ---------------------------------------------------------------------------
+def list_md_files(folder_id: str) -> list[dict]:
+    """
+    List markdown files in the given Drive folder.
+    Returns list of dicts with keys: id, name.
+    """
+    service = _get_service()
+    results: list[dict] = []
+    page_token = None
+    while True:
+        response = (
+            service.files()
+            .list(
+                q=f"'{folder_id}' in parents and trashed = false and name contains '.md'",
+                spaces="drive",
+                fields="nextPageToken, files(id, name)",
+                pageToken=page_token,
+                pageSize=100,
+            )
+            .execute()
+        )
+        results.extend(response.get("files", []))
+        page_token = response.get("nextPageToken")
+        if not page_token:
+            break
+    return results
+
+
+def create_folder(parent_id: str, name: str) -> str:
+    """Create a folder in Drive. Returns the new folder's ID."""
+    service = _get_user_service()
+    file_metadata = {
+        "name": name,
+        "parents": [parent_id],
+        "mimeType": "application/vnd.google-apps.folder",
+    }
+    folder = service.files().create(body=file_metadata, fields="id").execute()
+    logger.info("Created folder '%s' (id=%s)", name, folder["id"])
+    return folder["id"]
+
+
 def list_images(folder_id: Optional[str] = None) -> list[dict]:
     """
     List image files in the given Drive folder.

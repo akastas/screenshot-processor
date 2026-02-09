@@ -16,7 +16,7 @@ GCP_LOCATION = os.environ.get("GCP_LOCATION", "europe-west1")
 # Gemini Model
 # ---------------------------------------------------------------------------
 GEMINI_MODEL = os.environ.get(
-    "GEMINI_MODEL", "gemini-2.0-flash-lite"
+    "GEMINI_MODEL", "gemini-2.5-flash"
 )
 
 # ---------------------------------------------------------------------------
@@ -46,6 +46,8 @@ VAULT_PATHS = {
     "quotes":       "3-Resources/Quotes/Quotes.md",
     "learning":     "3-Resources/Learning/Learning.md",
     "wishlist":     "3-Resources/Wishlist/Wishlist.md",
+    "clients":      "2-Areas/Clients",
+    "faq":          "2-Areas/Clients/FAQ.md",
 }
 
 # ---------------------------------------------------------------------------
@@ -89,6 +91,9 @@ ROUTE_MAP = {
     },
     "WISHLIST": {
         "extra_file": VAULT_PATHS["wishlist"],
+    },
+    "BOOKING": {
+        "booking": True,
     },
 }
 

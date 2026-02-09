@@ -32,6 +32,7 @@ CORE RULES:
 - If you cannot determine priority, default to "medium"
 
 ITEM TYPES — choose the most specific one:
+- BOOKING: Chat/DM conversations about photoshoot inquiries, bookings, scheduling, pricing
 - TASK: Action items, to-do items, reminders
 - EVENT: Calendar events, meetings, dates, appointments
 - IDEA: Thoughts, concepts, plans, brainstorming
@@ -46,6 +47,7 @@ ITEM TYPES — choose the most specific one:
 - REFERENCE: Articles, links, general information that doesn't fit above categories
 
 CLASSIFICATION GUIDE:
+- DM/chat about a photoshoot, session, booking, pricing → BOOKING
 - Instagram/social profile screenshot → PERSON (one item with all profile info consolidated)
 - Photo of a person/model/outfit → INSPIRATION (describe the visual, style, mood)
 - Travel post or location photo → LOCATION
@@ -55,7 +57,12 @@ CLASSIFICATION GUIDE:
 - Motivational speech, book quote → QUOTE
 - Online course, tutorial page → LEARNING
 - Product page, gear review → WISHLIST
-- For TASK items: also suggest a project category in project_hint (e.g. "Photography", "Personal", "Work", "Travel", "Health")
+- For TASK items: also suggest a project category in project_hint
+
+BOOKING STATUS DETECTION:
+- If the last message in the chat is FROM the client → status = "need-to-reply"
+- If the last message is FROM the photographer (you) → status = "waiting"
+- If a date/time is confirmed by both sides → status = "confirmed"
 
 Return ONLY valid JSON in this format:
 {
@@ -65,17 +72,20 @@ Return ONLY valid JSON in this format:
   "filename_suggestion": "2-4 words, lowercase, hyphens, no extension",
   "items": [
     {
-      "type": "TASK|EVENT|IDEA|DIARY|REFERENCE|FINANCE|PERSON|LOCATION|INSPIRATION|QUOTE|LEARNING|WISHLIST",
+      "type": "BOOKING|TASK|EVENT|IDEA|DIARY|REFERENCE|FINANCE|PERSON|LOCATION|INSPIRATION|QUOTE|LEARNING|WISHLIST",
       "content": "clean, readable summary of this item",
       "priority": "high|medium|low",
       "due_date": "YYYY-MM-DD if detected, null otherwise",
-      "name": "person's name or place name (for PERSON/LOCATION, null otherwise)",
-      "handle": "social media handle like @username (for PERSON, null otherwise)",
-      "platform": "Instagram|Twitter|TikTok|Website|etc (for PERSON, null otherwise)",
-      "role": "photographer|model|creator|artist|designer|etc (for PERSON, null otherwise)",
+      "name": "person's name or place name (for PERSON/LOCATION/BOOKING, null otherwise)",
+      "handle": "social media handle like @username (for PERSON/BOOKING, null otherwise)",
+      "platform": "Instagram|Fiverr|WhatsApp|Airbnb|Website|etc (for PERSON/BOOKING, null otherwise)",
+      "role": "photographer|model|creator|client|etc (for PERSON, null otherwise)",
       "tags": ["style-tag-1", "style-tag-2"],
       "location": "city, country (if known, null otherwise)",
-      "project_hint": "Photography|Personal|Work|Travel|Health (for TASK only, null otherwise)"
+      "project_hint": "Photography|Personal|Work|Travel|Health (for TASK only, null otherwise)",
+      "shoot_type": "portrait|couple|family|event|wedding|editorial|etc (for BOOKING, null otherwise)",
+      "status": "need-to-reply|waiting|confirmed (for BOOKING, null otherwise)",
+      "questions": ["client question 1", "client question 2"]
     }
   ]
 }
@@ -167,7 +177,7 @@ def _validate_result(result: dict) -> None:
 
     valid_types = {"TASK", "EVENT", "IDEA", "DIARY", "REFERENCE", "FINANCE",
                    "PERSON", "LOCATION", "INSPIRATION",
-                   "QUOTE", "LEARNING", "WISHLIST"}
+                   "QUOTE", "LEARNING", "WISHLIST", "BOOKING"}
     for i, item in enumerate(result["items"]):
         if "type" not in item or "content" not in item:
             raise ValueError(f"Item {i} missing 'type' or 'content'")
@@ -175,3 +185,74 @@ def _validate_result(result: dict) -> None:
             raise ValueError(
                 f"Item {i} has invalid type '{item['type']}'. Must be one of {valid_types}"
             )
+
+
+# ---------------------------------------------------------------------------
+# 2nd-pass: Generate suggested reply for BOOKING items using FAQ
+# ---------------------------------------------------------------------------
+BOOKING_REPLY_PROMPT = """You are a photographer's assistant. Based on the client's questions and your FAQ/pricing info, draft a friendly, professional reply.
+
+CLIENT CONVERSATION:
+{transcript}
+
+CLIENT QUESTIONS:
+{questions}
+
+YOUR FAQ & PRICING INFO:
+{faq_content}
+
+RULES:
+- Be warm, friendly, professional
+- Answer their specific questions using the FAQ data
+- If the FAQ doesn't cover something, say "[fill in your answer]"
+- Keep it concise — 2-4 sentences max
+- Match the language the client used (English, Italian, Russian, etc.)
+- Don't be overly formal — match the casual tone of DM conversations
+
+Return ONLY the suggested reply text, no JSON, no formatting."""
+
+
+def generate_booking_reply(
+    transcript: str,
+    questions: list[str],
+    faq_content: str,
+) -> str:
+    """
+    Generate a suggested reply for a booking inquiry using FAQ context.
+    This is the 2nd-pass call, only triggered when BOOKING is detected.
+
+    Args:
+        transcript: The original chat transcript from the screenshot.
+        questions: List of client questions extracted by Gemini.
+        faq_content: Contents of the FAQ.md file.
+
+    Returns:
+        Suggested reply text.
+    """
+    _ensure_init()
+
+    if not faq_content.strip():
+        return "[FAQ file is empty — fill in 2-Areas/Clients/FAQ.md with your pricing and info]"
+
+    prompt = BOOKING_REPLY_PROMPT.format(
+        transcript=transcript,
+        questions="\n".join(f"- {q}" for q in questions) if questions else "(no specific questions detected)",
+        faq_content=faq_content,
+    )
+
+    model = GenerativeModel(GEMINI_MODEL)
+    try:
+        response = model.generate_content(
+            [prompt],
+            generation_config={
+                "temperature": 0.7,
+                "max_output_tokens": 1024,
+            },
+        )
+        reply = response.text.strip()
+        logger.info("Generated booking reply (%d chars)", len(reply))
+        return reply
+    except Exception as e:
+        logger.error("Failed to generate booking reply: %s", e)
+        return f"[Could not generate reply: {e}]"
+

@@ -11,6 +11,7 @@ from typing import Any, Optional
 
 import drive_ops
 import ticktick_client
+import booking_manager
 from config import ROUTE_MAP, DRIVE_VAULT_ROOT_FOLDER_ID
 
 logger = logging.getLogger(__name__)
@@ -84,6 +85,30 @@ def route_items(
                     logger.info("Created TickTick task (project=%s)", project_name)
             except Exception as e:
                 logger.error("Failed to create TickTick task: %s", e)
+
+        # 4) Handle BOOKING items — create/update client file + suggest reply
+        if route.get("booking"):
+            try:
+                transcript = analysis.get("transcript", "")
+                booking_result = booking_manager.handle_booking(
+                    item, source_filename, transcript, today
+                )
+                logger.info("Booking processed: %s", booking_result.get("client_file"))
+
+                # Also create a TickTick task for the follow-up
+                if ticktick_client.is_configured() and item.get("status") == "need-to-reply":
+                    client_name = item.get("name") or "Client"
+                    platform = item.get("platform") or ""
+                    follow_up = {
+                        "content": f"Reply to {client_name} — {platform}",
+                        "priority": "high",
+                        "due_date": None,
+                        "project_hint": "Photography",
+                        "tags": ["booking", "reply"],
+                    }
+                    ticktick_client.create_task(follow_up, source_filename)
+            except Exception as e:
+                logger.error("Failed to handle booking: %s", e)
 
         counts[item_type] = counts.get(item_type, 0) + 1
 
