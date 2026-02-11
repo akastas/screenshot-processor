@@ -76,6 +76,20 @@ def route_items(
             except Exception as e:
                 logger.error("Failed to append to %s: %s", extra_path, e)
 
+        # 2b) Dynamic vault path for KNOWLEDGE items
+        if route.get("dynamic") and item.get("vault_path"):
+            vault_path = item["vault_path"].rstrip("/")
+            # Build a filename from the content (first 40 chars, cleaned)
+            title = item["content"][:40].replace("[[", "").replace("]]", "").strip()
+            # Use the last folder segment as the catch-all file name
+            folder_name = vault_path.rsplit("/", 1)[-1] if "/" in vault_path else vault_path
+            file_path = f"{vault_path}/{folder_name}.md"
+            try:
+                _append_to_vault_file(file_path, content_block, today)
+                logger.info("Routed KNOWLEDGE to dynamic path: %s", file_path)
+            except Exception as e:
+                logger.error("Failed to route KNOWLEDGE to %s: %s", file_path, e)
+
         # 3) Create TickTick task for TASK items
         if item_type == "TASK" and ticktick_client.is_configured():
             try:
@@ -285,6 +299,43 @@ def _format_item(item: dict, source_filename: str, summary: str) -> str:
 
     elif item_type == "FINANCE":
         lines.append(f"| {today} | {content} | `screenshot` |")
+
+    elif item_type == "RECIPE":
+        lines.append(f"### {content[:80]}")
+        ingredients = item.get("ingredients") or []
+        if ingredients:
+            lines.append("**Ingredients:**")
+            for ing in ingredients:
+                lines.append(f"- {ing}")
+        steps = item.get("steps") or []
+        if steps:
+            lines.append("**Steps:**")
+            for i, step in enumerate(steps, 1):
+                lines.append(f"{i}. {step}")
+        servings = item.get("servings")
+        prep_time = item.get("prep_time")
+        if servings:
+            lines.append(f"- **Servings:** {servings}")
+        if prep_time:
+            lines.append(f"- **Prep time:** {prep_time}")
+        tags = item.get("tags") or []
+        if tags:
+            lines.append(f"- **Tags:** {', '.join(tags)}")
+        lines.append(f"- **Added:** {today}")
+
+    elif item_type == "KNOWLEDGE":
+        lines.append(f"### {content[:80]}")
+        lines.append(f"- **Notes:** {content}")
+        tags = item.get("tags") or []
+        if tags:
+            tag_str = " ".join(f"#{t}" for t in tags)
+            lines.append(f"- **Tags:** {tag_str}")
+        linked = item.get("linked_concepts") or []
+        if linked:
+            links_str = ", ".join(f"[[{c}]]" for c in linked)
+            lines.append(f"- **Related:** {links_str}")
+        lines.append(f"- **Added:** {today}")
+
     else:
         lines.append(f"- {content}")
 

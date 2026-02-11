@@ -26,8 +26,12 @@ DRIVE_INBOX_FOLDER_ID = os.environ.get("DRIVE_INBOX_FOLDER_ID", "1xHPRq1MR2JmQN-
 DRIVE_ARCHIVE_FOLDER_ID = os.environ.get("DRIVE_ARCHIVE_FOLDER_ID", "1jHz-UP3-YQ8a5bn__E6UkHo8ylv6rdjj")
 DRIVE_VAULT_ROOT_FOLDER_ID = os.environ.get("DRIVE_VAULT_ROOT_FOLDER_ID", "1VKCaMxB639IyfwDHIvZPE4YzhZheTpuq")
 
-# Image file extensions to process
+# File extensions to process
 IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "heic", "heif", "bmp", "gif"}
+TEXT_EXTENSIONS = {"txt", "md", "text"}
+
+# Maximum text file size (bytes) — ~25K words
+MAX_TEXT_SIZE = 100_000
 
 # ---------------------------------------------------------------------------
 # Obsidian Vault — Path structure inside Google Drive
@@ -46,8 +50,9 @@ VAULT_PATHS = {
     "quotes":       "3-Resources/Quotes/Quotes.md",
     "learning":     "3-Resources/Learning/Learning.md",
     "wishlist":     "3-Resources/Wishlist/Wishlist.md",
+    "recipes":      "3-Resources/Recipes/Recipes.md",
     "clients":      "2-Areas/Clients",
-    "faq":          "2-Areas/Clients/FAQ.md",
+    "faq":          "2-Areas/Clients/Photography Business Info.md",
 }
 
 # ---------------------------------------------------------------------------
@@ -94,6 +99,13 @@ ROUTE_MAP = {
     },
     "BOOKING": {
         "booking": True,
+    },
+    "RECIPE": {
+        "extra_file": VAULT_PATHS["recipes"],
+    },
+    # KNOWLEDGE items use a dynamic vault_path from Gemini — handled in markdown_router
+    "KNOWLEDGE": {
+        "dynamic": True,
     },
 }
 

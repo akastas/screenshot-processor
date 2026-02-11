@@ -1,5 +1,5 @@
 """
-One-time script: Create Dashboard.md and FAQ.md in 2-Areas/Clients/ on Google Drive.
+One-time script: Create Booking Pipeline.md and Photography Business Info.md in 2-Areas/Clients/ on Google Drive.
 Run locally with your .env.deploy credentials loaded.
 
 Usage:
@@ -24,7 +24,9 @@ tags: [dashboard, booking]
 
 ## 🔴 Need to Reply
 ```dataview
-TABLE client, platform, shoot_type, date_discussed
+TABLE WITHOUT ID
+  link(file.path, client) AS "Client",
+  platform, shoot_type, date_discussed
 FROM "2-Areas/Clients"
 WHERE status = "need-to-reply"
 SORT last_updated DESC
@@ -32,7 +34,9 @@ SORT last_updated DESC
 
 ## 🟡 Waiting for Response
 ```dataview
-TABLE client, platform, shoot_type, date_discussed
+TABLE WITHOUT ID
+  link(file.path, client) AS "Client",
+  platform, shoot_type, date_discussed
 FROM "2-Areas/Clients"
 WHERE status = "waiting"
 SORT last_updated DESC
@@ -40,7 +44,9 @@ SORT last_updated DESC
 
 ## 🟢 Confirmed Shoots
 ```dataview
-TABLE client, platform, shoot_type, date_discussed, location
+TABLE WITHOUT ID
+  link(file.path, client) AS "Client",
+  platform, shoot_type, date_discussed, location
 FROM "2-Areas/Clients"
 WHERE status = "confirmed"
 SORT date_discussed ASC
@@ -48,7 +54,9 @@ SORT date_discussed ASC
 
 ## ✅ Completed
 ```dataview
-TABLE client, platform, shoot_type, date_discussed
+TABLE WITHOUT ID
+  link(file.path, client) AS "Client",
+  platform, shoot_type, date_discussed
 FROM "2-Areas/Clients"
 WHERE status = "completed"
 SORT last_updated DESC
@@ -57,7 +65,9 @@ LIMIT 20
 
 ## 📊 Stats
 ```dataview
-TABLE length(rows) AS Count
+TABLE WITHOUT ID
+  status AS "Status",
+  length(rows) AS "Count"
 FROM "2-Areas/Clients"
 WHERE status != null
 GROUP BY status
@@ -137,21 +147,21 @@ def main():
 
     print(f"Clients folder ID: {folder_id}\n")
 
-    # Create Dashboard.md
-    existing = drive_ops.find_file_by_name("Dashboard.md", folder_id)
+    # Create Booking Pipeline.md
+    existing = drive_ops.find_file_by_name("Booking Pipeline.md", folder_id)
     if existing:
-        print("Dashboard.md already exists, skipping")
+        print("Booking Pipeline.md already exists, skipping")
     else:
-        file_id = drive_ops.create_md_file(folder_id, "Dashboard.md", DASHBOARD_CONTENT)
-        print(f"✅ Created Dashboard.md (id={file_id})")
+        file_id = drive_ops.create_md_file(folder_id, "Booking Pipeline.md", DASHBOARD_CONTENT)
+        print(f"✅ Created Booking Pipeline.md (id={file_id})")
 
-    # Create FAQ.md
-    existing = drive_ops.find_file_by_name("FAQ.md", folder_id)
+    # Create Photography Business Info.md
+    existing = drive_ops.find_file_by_name("Photography Business Info.md", folder_id)
     if existing:
-        print("FAQ.md already exists, skipping")
+        print("Photography Business Info.md already exists, skipping")
     else:
-        file_id = drive_ops.create_md_file(folder_id, "FAQ.md", FAQ_CONTENT)
-        print(f"✅ Created FAQ.md (id={file_id})")
+        file_id = drive_ops.create_md_file(folder_id, "Photography Business Info.md", FAQ_CONTENT)
+        print(f"✅ Created Photography Business Info.md (id={file_id})")
 
     print("\n=== Done! Check your vault at 2-Areas/Clients/ ===")
 

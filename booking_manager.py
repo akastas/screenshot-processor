@@ -27,20 +27,23 @@ STATUS_EMOJI = {
 }
 
 
-def _slugify(name: str) -> str:
-    """Convert a name to a filename-safe slug."""
-    slug = name.lower().strip()
-    slug = re.sub(r"[^a-z0-9\s-]", "", slug)
-    slug = re.sub(r"[\s]+", "-", slug)
-    return slug[:50]
+def _sanitize_filename(name: str) -> str:
+    """Remove characters illegal in filenames while preserving casing and spaces."""
+    clean = name.strip()
+    # Remove characters illegal in filenames (Windows + Drive)
+    clean = re.sub(r'[<>:"/\\|?*]', '', clean)
+    # Collapse multiple spaces
+    clean = re.sub(r'\s+', ' ', clean)
+    return clean[:80]
 
 
 def _build_client_filename(client_name: str, platform: str) -> str:
-    """Build a filename like 'maria-instagram.md'."""
-    parts = [_slugify(client_name)]
+    """Build a pretty filename like 'Andrea — Instagram.md'."""
+    name = _sanitize_filename(client_name)
     if platform:
-        parts.append(_slugify(platform))
-    return "-".join(parts) + ".md"
+        plat = _sanitize_filename(platform)
+        return f"{name} — {plat}.md"
+    return f"{name}.md"
 
 
 def _find_clients_folder_id() -> Optional[str]:
@@ -87,9 +90,9 @@ def _find_existing_client_file(
 
     # Strategy 2: Match by handle in filename
     if handle:
-        handle_slug = _slugify(handle.lstrip("@"))
+        handle_clean = handle.lstrip("@").lower()
         for f in files:
-            if handle_slug in f["name"].lower():
+            if handle_clean in f["name"].lower():
                 return f["id"]
 
     return None
@@ -203,7 +206,7 @@ def _build_update_content(
 
 
 def _get_faq_content() -> str:
-    """Read the FAQ.md file from the vault. Returns empty string if not found."""
+    """Read the Photography Business Info.md file from the vault. Returns empty string if not found."""
     try:
         faq_path = VAULT_PATHS["faq"]
         parts = faq_path.split("/")

@@ -23,6 +23,7 @@ from config import (
     DAILY_NOTES_FOLDER,
     DAILY_NOTE_TEMPLATE,
     IMAGE_EXTENSIONS,
+    TEXT_EXTENSIONS,
     OAUTH_CLIENT_ID,
     OAUTH_CLIENT_SECRET,
     OAUTH_REFRESH_TOKEN,
@@ -158,6 +159,62 @@ def list_images(folder_id: Optional[str] = None) -> list[dict]:
 
     logger.info("Found %d images in folder %s", len(results), folder)
     return results
+
+
+def list_text_files(folder_id: Optional[str] = None) -> list[dict]:
+    """
+    List text/markdown files in the given Drive folder.
+    Returns list of dicts with keys: id, name, mimeType.
+    """
+    folder = folder_id or DRIVE_INBOX_FOLDER_ID
+    if not folder:
+        raise ValueError("DRIVE_INBOX_FOLDER_ID is not configured")
+
+    service = _get_service()
+    results: list[dict] = []
+    page_token = None
+
+    while True:
+        response = (
+            service.files()
+            .list(
+                q=f"'{folder}' in parents and trashed = false",
+                spaces="drive",
+                fields="nextPageToken, files(id, name, mimeType)",
+                pageToken=page_token,
+                pageSize=100,
+            )
+            .execute()
+        )
+        files = response.get("files", [])
+        for f in files:
+            ext = f["name"].rsplit(".", 1)[-1].lower() if "." in f["name"] else ""
+            if ext in TEXT_EXTENSIONS:
+                results.append(f)
+        page_token = response.get("nextPageToken")
+        if not page_token:
+            break
+
+    logger.info("Found %d text files in folder %s", len(results), folder)
+    return results
+
+
+def list_inbox_files(folder_id: Optional[str] = None) -> list[dict]:
+    """
+    List all processable files (images + text) in the inbox folder.
+    Returns list of dicts with keys: id, name, mimeType, file_type ('image' or 'text').
+    """
+    images = list_images(folder_id)
+    for img in images:
+        img["file_type"] = "image"
+
+    texts = list_text_files(folder_id)
+    for txt in texts:
+        txt["file_type"] = "text"
+
+    all_files = images + texts
+    logger.info("Found %d total inbox files (%d images, %d text)", len(all_files), len(images), len(texts))
+    return all_files
 
 
 def find_file_by_name(name: str, parent_folder_id: str) -> Optional[dict]:

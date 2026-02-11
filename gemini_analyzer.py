@@ -1,6 +1,6 @@
 """
-Screenshot Processor — Gemini Image Analysis
-Sends images to Gemini Flash-Lite via Vertex AI and returns structured JSON.
+Screenshot Processor — Gemini Analysis
+Sends images and text to Gemini via Vertex AI and returns structured JSON.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import Any
 import vertexai
 from vertexai.generative_models import GenerativeModel, Part
 
-from config import GCP_PROJECT_ID, GCP_LOCATION, GEMINI_MODEL
+from config import GCP_PROJECT_ID, GCP_LOCATION, GEMINI_MODEL, MAX_TEXT_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,12 @@ ITEM TYPES — choose the most specific one:
 - WISHLIST: Products to buy, gear, gadgets, equipment, items of interest
 - FINANCE: Receipts, prices, transactions, bills, credits
 - REFERENCE: Articles, links, general information that doesn't fit above categories
+
+WIKILINKS:
+- Wrap key concepts, people, places, and topics in [[double brackets]] for Obsidian linking
+- Example: "[[Vitamin D]] improves [[calcium]] absorption"
+- Be selective — only link meaningful concepts, not common words
+- Also add a "linked_concepts" array listing the concepts you linked
 
 CLASSIFICATION GUIDE:
 - DM/chat about a photoshoot, session, booking, pricing → BOOKING
@@ -81,6 +87,7 @@ Return ONLY valid JSON in this format:
       "platform": "Instagram|Fiverr|WhatsApp|Airbnb|Website|etc (for PERSON/BOOKING, null otherwise)",
       "role": "photographer|model|creator|client|etc (for PERSON, null otherwise)",
       "tags": ["style-tag-1", "style-tag-2"],
+      "linked_concepts": ["concept1", "concept2"],
       "location": "city, country (if known, null otherwise)",
       "project_hint": "Photography|Personal|Work|Travel|Health (for TASK only, null otherwise)",
       "shoot_type": "portrait|couple|family|event|wedding|editorial|etc (for BOOKING, null otherwise)",
@@ -91,6 +98,78 @@ Return ONLY valid JSON in this format:
 }
 
 IMPORTANT: Return ONLY the JSON object, no markdown fences, no extra text."""
+
+# ---------------------------------------------------------------------------
+# Text analysis prompt — for .txt / .md files
+# ---------------------------------------------------------------------------
+TEXT_ANALYSIS_PROMPT = """You are a knowledge extraction assistant for a personal Obsidian vault (second brain, PARA method).
+
+You are analyzing a text document — likely an LLM conversation, research notes, or personal writing.
+
+CORE RULES:
+- Extract up to 10 distinct knowledge items from the text
+- Use [[wikilinks]] to wrap key concepts for Obsidian Graph View linking
+- Be selective with wikilinks — only meaningful concepts, not common words
+- CONSOLIDATE related information — don't create 10 items when 3 would cover it
+- Always include a "daily_snippet" — a 1-2 sentence summary of the document
+
+ITEM TYPES — choose the most appropriate:
+- TASK: Action items, things to do, follow-ups mentioned in the text
+- EVENT: Scheduled events, appointments, meetings discussed
+- RECIPE: Food recipes with ingredients and preparation steps
+- KNOWLEDGE: Insights, research findings, explanations, how-tos, philosophical ideas, health/nutrition info, tech concepts — anything worth storing
+- IDEA: Creative ideas, brainstorming, concepts to explore later
+- DIARY: Personal reflections, journal entries
+- PERSON: People mentioned who are worth remembering
+- LOCATION: Places discussed that are worth saving
+- QUOTE: Notable quotes, wisdom, memorable phrases
+- LEARNING: Educational content, tutorials, courses discussed
+- WISHLIST: Products/items the person wants to buy
+- FINANCE: Financial info, prices, transactions
+- REFERENCE: General reference info that doesn't fit other categories
+
+KNOWLEDGE TYPE — Dynamic vault path:
+For KNOWLEDGE items, suggest where they should live in the vault. Use existing paths where appropriate:
+- "3-Resources/Nutrition" for food, diet, supplement info
+- "3-Resources/Philosophy" for philosophical ideas, ethics, stoicism
+- "3-Resources/Tech" for technology topics
+- "2-Areas/Health" for health, fitness, wellness
+- "3-Resources/Psychology" for mental models, behavior, mindset
+- Or create a new logical path following the PARA pattern
+
+RECIPE TYPE — Structured format:
+For RECIPE items, include:
+- "ingredients": list of ingredients with quantities
+- "steps": list of preparation steps
+- "servings": number of servings (if known)
+- "prep_time": preparation time (if known)
+
+Return ONLY valid JSON in this format:
+{
+  "summary": "one line description of the document",
+  "language": "detected primary language",
+  "filename_suggestion": "2-4 words, lowercase, hyphens, no extension",
+  "daily_snippet": "1-2 sentence summary with [[wikilinks]] for the daily note",
+  "items": [
+    {
+      "type": "KNOWLEDGE|TASK|RECIPE|IDEA|EVENT|DIARY|PERSON|LOCATION|QUOTE|LEARNING|WISHLIST|FINANCE|REFERENCE",
+      "content": "clean summary with [[wikilinks]] to key concepts",
+      "vault_path": "suggested vault path like '3-Resources/Nutrition' (for KNOWLEDGE type, null otherwise)",
+      "priority": "high|medium|low",
+      "tags": ["tag1", "tag2"],
+      "linked_concepts": ["concept1", "concept2"],
+      "due_date": "YYYY-MM-DD (for TASK/EVENT, null otherwise)",
+      "name": "person/place name (for PERSON/LOCATION, null otherwise)",
+      "ingredients": ["item1", "item2"] ,
+      "steps": ["step1", "step2"],
+      "servings": "number (for RECIPE, null otherwise)",
+      "prep_time": "time string (for RECIPE, null otherwise)"
+    }
+  ]
+}
+
+IMPORTANT: Return ONLY the JSON object, no markdown fences, no extra text."""
+
 
 # ---------------------------------------------------------------------------
 # Initialization
@@ -165,6 +244,64 @@ def analyze_image(image_bytes: bytes, mime_type: str = "image/png") -> dict[str,
     )
 
 
+def analyze_text(text_content: str) -> dict[str, Any]:
+    """
+    Send a text document to Gemini for analysis.
+
+    Args:
+        text_content: The text content to analyze.
+
+    Returns:
+        Parsed JSON dict with keys: summary, language, filename_suggestion,
+        daily_snippet, items[].
+
+    Raises:
+        ValueError: If Gemini returns unparseable output after retries.
+    """
+    _ensure_init()
+
+    # Truncate if too large
+    if len(text_content.encode('utf-8')) > MAX_TEXT_SIZE:
+        text_content = text_content[:MAX_TEXT_SIZE]
+        logger.warning("Text truncated to %d bytes (MAX_TEXT_SIZE)", MAX_TEXT_SIZE)
+
+    model = GenerativeModel(GEMINI_MODEL)
+
+    last_error = None
+    for attempt in range(3):
+        try:
+            response = model.generate_content(
+                [TEXT_ANALYSIS_PROMPT, f"\n\n---\nDOCUMENT TO ANALYZE:\n---\n\n{text_content}"],
+                generation_config={
+                    "temperature": 0.1,
+                    "max_output_tokens": 8192,
+                    "response_mime_type": "application/json",
+                },
+            )
+
+            raw_text = response.text.strip()
+            if raw_text.startswith("```"):
+                raw_text = raw_text.split("\n", 1)[1]
+                if raw_text.endswith("```"):
+                    raw_text = raw_text[:-3].strip()
+
+            result = json.loads(raw_text)
+            _validate_text_result(result)
+            logger.info("Gemini text analysis succeeded: %s", result.get("summary", ""))
+            return result
+
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            last_error = e
+            logger.warning(
+                "Gemini text attempt %d failed (%s), retrying...", attempt + 1, str(e)
+            )
+            time.sleep(2 ** attempt)
+
+    raise ValueError(
+        f"Failed to get valid JSON from Gemini after 3 attempts. Last error: {last_error}"
+    )
+
+
 def _validate_result(result: dict) -> None:
     """Validate the structure of a Gemini analysis result."""
     required_keys = {"summary", "language", "transcript", "filename_suggestion", "items"}
@@ -177,7 +314,31 @@ def _validate_result(result: dict) -> None:
 
     valid_types = {"TASK", "EVENT", "IDEA", "DIARY", "REFERENCE", "FINANCE",
                    "PERSON", "LOCATION", "INSPIRATION",
-                   "QUOTE", "LEARNING", "WISHLIST", "BOOKING"}
+                   "QUOTE", "LEARNING", "WISHLIST", "BOOKING",
+                   "RECIPE", "KNOWLEDGE"}
+    for i, item in enumerate(result["items"]):
+        if "type" not in item or "content" not in item:
+            raise ValueError(f"Item {i} missing 'type' or 'content'")
+        if item["type"] not in valid_types:
+            raise ValueError(
+                f"Item {i} has invalid type '{item['type']}'. Must be one of {valid_types}"
+            )
+
+
+def _validate_text_result(result: dict) -> None:
+    """Validate the structure of a Gemini text analysis result."""
+    required_keys = {"summary", "language", "filename_suggestion", "items"}
+    missing = required_keys - set(result.keys())
+    if missing:
+        raise ValueError(f"Missing required keys: {missing}")
+
+    if not isinstance(result["items"], list):
+        raise ValueError("'items' must be a list")
+
+    valid_types = {"TASK", "EVENT", "IDEA", "DIARY", "REFERENCE", "FINANCE",
+                   "PERSON", "LOCATION", "INSPIRATION",
+                   "QUOTE", "LEARNING", "WISHLIST",
+                   "RECIPE", "KNOWLEDGE"}
     for i, item in enumerate(result["items"]):
         if "type" not in item or "content" not in item:
             raise ValueError(f"Item {i} missing 'type' or 'content'")
@@ -232,7 +393,7 @@ def generate_booking_reply(
     _ensure_init()
 
     if not faq_content.strip():
-        return "[FAQ file is empty — fill in 2-Areas/Clients/FAQ.md with your pricing and info]"
+        return "[FAQ file is empty — fill in 2-Areas/Clients/Photography Business Info.md with your pricing and info]"
 
     prompt = BOOKING_REPLY_PROMPT.format(
         transcript=transcript,
