@@ -1,7 +1,7 @@
 """
 Screenshot Processor — Cloud Function Entry Point
-HTTP-triggered function called by Cloud Scheduler every 5 minutes.
-Processes images and text files from the Drive inbox.
+HTTP-triggered function called by Cloud Scheduler.
+Handles both screenshot processing (every 5 min) and proactive messaging (scheduled).
 """
 
 from __future__ import annotations
@@ -17,6 +17,9 @@ import functions_framework
 import drive_ops
 import gemini_analyzer
 import markdown_router
+import telegram_bot
+import dashboard_scanner
+import proactive_engine
 from config import (
     DRIVE_INBOX_FOLDER_ID,
     DRIVE_ARCHIVE_FOLDER_ID,
@@ -39,8 +42,34 @@ BATCH_SIZE = 15
 def process_screenshots(request):
     """
     Cloud Function entry point (HTTP trigger).
-    Processes all pending screenshots in the inbox folder.
+    Routes to the correct handler based on the 'action' field in the request body.
+
+    Actions:
+      - (default / no action): Process inbox screenshots
+      - "morning_briefing": Scan dashboard and send morning briefing via Telegram
+      - "nudge": Scan dashboard and send midday nudge via Telegram
+      - "evening_review": Scan dashboard and send evening review via Telegram
     """
+    # Parse action from request body
+    action = ""
+    try:
+        body = request.get_json(silent=True) or {}
+        action = body.get("action", "")
+    except Exception:
+        pass
+
+    if action == "morning_briefing":
+        return _handle_morning_briefing()
+    elif action == "nudge":
+        return _handle_nudge()
+    elif action == "evening_review":
+        return _handle_evening_review()
+    else:
+        return _handle_process_screenshots()
+
+
+def _handle_process_screenshots():
+    """Original screenshot processing logic."""
     print("=== Screenshot Processor triggered ===", flush=True)
     results = []
     errors = []
@@ -76,7 +105,14 @@ def process_screenshots(request):
         print(f"FATAL ERROR: {traceback.format_exc()}", flush=True)
         return json.dumps({"status": "error", "error": str(e)}), 500
 
-    # 3. Summary
+    # 3. Notify via Telegram if files were processed
+    if results and telegram_bot.is_configured():
+        try:
+            telegram_bot.send_processing_notification(results)
+        except Exception as e:
+            print(f"Telegram notification failed: {e}", flush=True)
+
+    # 4. Summary
     summary = {
         "status": "ok",
         "processed": len(results),
@@ -88,6 +124,126 @@ def process_screenshots(request):
     return json.dumps(summary, ensure_ascii=False), 200
 
 
+# ---------------------------------------------------------------------------
+# Proactive handlers
+# ---------------------------------------------------------------------------
+def _handle_morning_briefing():
+    """Scan the dashboard and send a morning briefing via Telegram."""
+    print("=== Morning Briefing triggered ===", flush=True)
+
+    if not telegram_bot.is_configured():
+        msg = "Telegram not configured — skipping morning briefing"
+        print(msg, flush=True)
+        return json.dumps({"status": "skipped", "reason": msg}), 200
+
+    try:
+        # 1. Scan the full dashboard
+        dashboard = dashboard_scanner.full_scan()
+
+        # 2. Generate briefing with Gemini
+        briefing = proactive_engine.generate_morning_briefing(dashboard)
+
+        # 3. Send via Telegram
+        sent = telegram_bot.send_morning_briefing(briefing)
+
+        result = {
+            "status": "ok",
+            "action": "morning_briefing",
+            "sent": sent,
+            "briefing": briefing,
+        }
+        print(f"=== Morning briefing {'sent' if sent else 'failed'} ===", flush=True)
+        return json.dumps(result, ensure_ascii=False), 200
+
+    except Exception as e:
+        print(f"Morning briefing ERROR: {traceback.format_exc()}", flush=True)
+        return json.dumps({"status": "error", "action": "morning_briefing", "error": str(e)}), 500
+
+
+def _handle_nudge():
+    """Scan the dashboard and send a midday nudge via Telegram."""
+    print("=== Midday Nudge triggered ===", flush=True)
+
+    if not telegram_bot.is_configured():
+        msg = "Telegram not configured — skipping nudge"
+        print(msg, flush=True)
+        return json.dumps({"status": "skipped", "reason": msg}), 200
+
+    try:
+        dashboard = dashboard_scanner.full_scan()
+        nudge = proactive_engine.generate_nudge(dashboard)
+        sent = telegram_bot.send_nudge(nudge)
+
+        result = {
+            "status": "ok",
+            "action": "nudge",
+            "sent": sent,
+            "nudge": nudge,
+        }
+        print(f"=== Nudge {'sent' if sent else 'failed'} ===", flush=True)
+        return json.dumps(result, ensure_ascii=False), 200
+
+    except Exception as e:
+        print(f"Nudge ERROR: {traceback.format_exc()}", flush=True)
+        return json.dumps({"status": "error", "action": "nudge", "error": str(e)}), 500
+
+
+def _handle_evening_review():
+    """Scan the dashboard and send an evening review via Telegram."""
+    print("=== Evening Review triggered ===", flush=True)
+
+    if not telegram_bot.is_configured():
+        msg = "Telegram not configured — skipping evening review"
+        print(msg, flush=True)
+        return json.dumps({"status": "skipped", "reason": msg}), 200
+
+    try:
+        dashboard = dashboard_scanner.full_scan()
+        review = proactive_engine.generate_evening_review(dashboard)
+
+        # Format and send
+        lines = []
+        review_text = review.get("review", "")
+        if review_text:
+            lines.append(f"*Evening Review*\n{review_text}")
+            lines.append("")
+
+        pending = review.get("still_pending", [])
+        if pending:
+            lines.append("*Still pending*")
+            for p in pending:
+                lines.append(f"• {p}")
+            lines.append("")
+
+        preview = review.get("tomorrow_preview", [])
+        if preview:
+            lines.append("*Coming up*")
+            for t in preview:
+                lines.append(f"📅 {t}")
+            lines.append("")
+
+        goodnight = review.get("goodnight", "Good night!")
+        lines.append(f"_{goodnight}_")
+
+        sent = telegram_bot.send_message("\n".join(lines))
+
+        result = {
+            "status": "ok",
+            "action": "evening_review",
+            "sent": sent,
+            "review": review,
+        }
+        print(f"=== Evening review {'sent' if sent else 'failed'} ===", flush=True)
+        return json.dumps(result, ensure_ascii=False), 200
+
+    except Exception as e:
+        print(f"Evening review ERROR: {traceback.format_exc()}", flush=True)
+        return json.dumps({"status": "error", "action": "evening_review", "error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Screenshot processing (unchanged)
+# ---------------------------------------------------------------------------
 def _process_single(file_id: str, filename: str, mime_type: str, file_type: str = "image") -> dict:
     """
     Process a single file end-to-end:
@@ -155,4 +311,3 @@ def _process_single(file_id: str, filename: str, mime_type: str, file_type: str 
     }
     print(f"--- Done: {filename} → {new_name} ---", flush=True)
     return result
-

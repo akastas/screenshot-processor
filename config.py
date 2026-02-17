@@ -137,6 +137,18 @@ TICKTICK_CLIENT_SECRET = os.environ.get("TICKTICK_CLIENT_SECRET", "")
 TICKTICK_ACCESS_TOKEN = os.environ.get("TICKTICK_ACCESS_TOKEN", "")
 
 # ---------------------------------------------------------------------------
+# Telegram Bot (proactive messaging)
+# ---------------------------------------------------------------------------
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+
+# ---------------------------------------------------------------------------
+# Proactive bot — schedule & behavior
+# ---------------------------------------------------------------------------
+# Timezone for scheduling (used by the proactive engine to determine "morning", etc.)
+PROACTIVE_TIMEZONE = os.environ.get("PROACTIVE_TIMEZONE", "Europe/Rome")
+
+# ---------------------------------------------------------------------------
 # Daily note template
 # ---------------------------------------------------------------------------
 DAILY_NOTE_TEMPLATE = """---
