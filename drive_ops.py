@@ -419,3 +419,76 @@ def find_or_create_daily_note(target_date: date) -> str:
     file_id = create_md_file(daily_folder_id, filename, content)
     logger.info("Created new daily note: %s", filename)
     return file_id
+
+
+# ---------------------------------------------------------------------------
+# Prompts — stored in Drive for easy editing without redeployment
+# ---------------------------------------------------------------------------
+_PROMPTS_FOLDER_NAME = "_prompts"
+_prompts_folder_id: Optional[str] = None
+_prompt_cache: dict[str, str] = {}
+
+
+def _get_prompts_folder_id() -> str:
+    """Find or create the _prompts folder under vault root."""
+    global _prompts_folder_id
+    if _prompts_folder_id:
+        return _prompts_folder_id
+
+    # Look for existing folder
+    service = _get_service()
+    escaped = _PROMPTS_FOLDER_NAME.replace("'", "\\'")
+    response = (
+        service.files()
+        .list(
+            q=(
+                f"name = '{escaped}' and '{DRIVE_VAULT_ROOT_FOLDER_ID}' in parents "
+                f"and mimeType = 'application/vnd.google-apps.folder' "
+                f"and trashed = false"
+            ),
+            spaces="drive",
+            fields="files(id)",
+            pageSize=1,
+        )
+        .execute()
+    )
+    files = response.get("files", [])
+    if files:
+        _prompts_folder_id = files[0]["id"]
+    else:
+        _prompts_folder_id = create_folder(DRIVE_VAULT_ROOT_FOLDER_ID, _PROMPTS_FOLDER_NAME)
+        logger.info("Created _prompts folder in vault root")
+
+    return _prompts_folder_id
+
+
+def load_prompt(filename: str, default_content: str) -> str:
+    """
+    Load a prompt from Drive's _prompts/ folder. Creates the file with
+    default_content if it doesn't exist yet (self-seeding on first run).
+    Cached per cold start so it's only fetched once per instance.
+
+    Args:
+        filename: e.g. 'prompt-image-analysis.md'
+        default_content: The prompt text to use if the file doesn't exist yet.
+
+    Returns:
+        The prompt text from Drive (or default if newly created).
+    """
+    if filename in _prompt_cache:
+        return _prompt_cache[filename]
+
+    folder_id = _get_prompts_folder_id()
+    existing = find_file_by_name(filename, folder_id)
+
+    if existing:
+        content = read_md_file(existing["id"])
+        logger.info("Loaded prompt '%s' from Drive (%d chars)", filename, len(content))
+    else:
+        # First run: seed the file with the hardcoded default
+        create_md_file(folder_id, filename, default_content)
+        content = default_content
+        logger.info("Created prompt file '%s' in Drive (seeded with default)", filename)
+
+    _prompt_cache[filename] = content
+    return content

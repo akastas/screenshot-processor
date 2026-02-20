@@ -13,14 +13,15 @@ from typing import Any
 import vertexai
 from vertexai.generative_models import GenerativeModel, Part
 
+import drive_ops
 from config import GCP_PROJECT_ID, GCP_LOCATION, GEMINI_MODEL, MAX_TEXT_SIZE
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Prompt
+# Prompt defaults — used to seed Drive files on first run
 # ---------------------------------------------------------------------------
-ANALYSIS_PROMPT = """You are a screenshot analysis assistant for a photographer's personal knowledge base.
+_DEFAULT_IMAGE_PROMPT = """You are a screenshot analysis assistant for a photographer's personal knowledge base.
 
 CORE RULES:
 - Transcribe ALL visible text EXACTLY as written in the "transcript" field
@@ -100,9 +101,9 @@ Return ONLY valid JSON in this format:
 IMPORTANT: Return ONLY the JSON object, no markdown fences, no extra text."""
 
 # ---------------------------------------------------------------------------
-# Text analysis prompt — for .txt / .md files
+# Text analysis prompt default — for .txt / .md files
 # ---------------------------------------------------------------------------
-TEXT_ANALYSIS_PROMPT = """You are a knowledge extraction assistant for a personal Obsidian vault (second brain, PARA method).
+_DEFAULT_TEXT_PROMPT = """You are a knowledge extraction assistant for a personal Obsidian vault (second brain, PARA method).
 
 You are analyzing a text document — likely an LLM conversation, research notes, or personal writing.
 
@@ -172,6 +173,18 @@ IMPORTANT: Return ONLY the JSON object, no markdown fences, no extra text."""
 
 
 # ---------------------------------------------------------------------------
+# Prompt loader — reads from Drive, cached per cold start
+# ---------------------------------------------------------------------------
+def _get_prompt(filename: str, default: str) -> str:
+    """Load a prompt from Drive's _prompts/ folder, fallback to default."""
+    try:
+        return drive_ops.load_prompt(filename, default)
+    except Exception as e:
+        logger.warning("Could not load prompt '%s' from Drive: %s — using default", filename, e)
+        return default
+
+
+# ---------------------------------------------------------------------------
 # Initialization
 # ---------------------------------------------------------------------------
 _initialized = False
@@ -207,12 +220,13 @@ def analyze_image(image_bytes: bytes, mime_type: str = "image/png") -> dict[str,
 
     model = GenerativeModel(GEMINI_MODEL)
     image_part = Part.from_data(data=image_bytes, mime_type=mime_type)
+    prompt = _get_prompt("prompt-image-analysis.md", _DEFAULT_IMAGE_PROMPT)
 
     last_error = None
     for attempt in range(3):
         try:
             response = model.generate_content(
-                [image_part, ANALYSIS_PROMPT],
+                [image_part, prompt],
                 generation_config={
                     "temperature": 0.1,
                     "max_output_tokens": 4096,
@@ -266,12 +280,13 @@ def analyze_text(text_content: str) -> dict[str, Any]:
         logger.warning("Text truncated to %d bytes (MAX_TEXT_SIZE)", MAX_TEXT_SIZE)
 
     model = GenerativeModel(GEMINI_MODEL)
+    prompt = _get_prompt("prompt-text-analysis.md", _DEFAULT_TEXT_PROMPT)
 
     last_error = None
     for attempt in range(3):
         try:
             response = model.generate_content(
-                [TEXT_ANALYSIS_PROMPT, f"\n\n---\nDOCUMENT TO ANALYZE:\n---\n\n{text_content}"],
+                [prompt, f"\n\n---\nDOCUMENT TO ANALYZE:\n---\n\n{text_content}"],
                 generation_config={
                     "temperature": 0.1,
                     "max_output_tokens": 8192,
@@ -351,7 +366,7 @@ def _validate_text_result(result: dict) -> None:
 # ---------------------------------------------------------------------------
 # 2nd-pass: Generate suggested reply for BOOKING items using FAQ
 # ---------------------------------------------------------------------------
-BOOKING_REPLY_PROMPT = """You are a photographer's assistant. Based on the client's questions and your FAQ/pricing info, draft a friendly, professional reply.
+_DEFAULT_BOOKING_REPLY_PROMPT = """You are a photographer's assistant. Based on the client's questions and your FAQ/pricing info, draft a friendly, professional reply.
 
 CLIENT CONVERSATION:
 {transcript}
@@ -395,7 +410,8 @@ def generate_booking_reply(
     if not faq_content.strip():
         return "[FAQ file is empty — fill in 2-Areas/Clients/Photography Business Info.md with your pricing and info]"
 
-    prompt = BOOKING_REPLY_PROMPT.format(
+    booking_prompt_template = _get_prompt("prompt-booking-reply.md", _DEFAULT_BOOKING_REPLY_PROMPT)
+    prompt = booking_prompt_template.format(
         transcript=transcript,
         questions="\n".join(f"- {q}" for q in questions) if questions else "(no specific questions detected)",
         faq_content=faq_content,
