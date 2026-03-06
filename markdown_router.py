@@ -12,7 +12,7 @@ from typing import Any, Optional
 import drive_ops
 import ticktick_client
 import booking_manager
-from config import ROUTE_MAP, DRIVE_VAULT_ROOT_FOLDER_ID
+from config import ROUTE_MAP, DRIVE_VAULT_ROOT_FOLDER_ID, VAULT_PATHS
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,7 @@ def route_items(
     analysis: dict[str, Any],
     source_filename: str,
     target_date: Optional[date] = None,
+    archived_filename: Optional[str] = None,
 ) -> dict[str, int]:
     """
     Route all items from a Gemini analysis to the correct files.
@@ -29,6 +30,7 @@ def route_items(
         analysis: Parsed Gemini JSON with 'items', 'summary', etc.
         source_filename: Original screenshot filename (for attribution).
         target_date: Date for the daily note. Defaults to today.
+        archived_filename: Renamed filename in the archive folder (for Screenshot Log embeds).
 
     Returns:
         Dict with counts per type, e.g. {"TASK": 2, "IDEA": 1}.
@@ -151,6 +153,13 @@ def route_items(
                 logger.error("Failed to handle booking: %s", e)
 
         counts[item_type] = counts.get(item_type, 0) + 1
+
+    # Append summary to Screenshot Log
+    try:
+        _append_to_screenshot_log(analysis, source_filename, archived_filename, today)
+    except Exception as e:
+        print(f"  Screenshot Log ERROR: {e}", flush=True)
+        logger.error("Failed to append to Screenshot Log: %s", e)
 
     logger.info("Routed %d items from %s: %s", len(items), source_filename, counts)
     return counts
@@ -347,6 +356,7 @@ def _append_to_vault_file(vault_relative_path: str, content: str, today: date) -
     """
     Find a file by its vault-relative path and append content.
     The path is like '2-Areas/Calendar/Events.md' — we split into folder path + filename.
+    Creates any missing folders on the fly.
     """
     parts = vault_relative_path.rsplit("/", 1)
     if len(parts) == 2:
@@ -354,12 +364,9 @@ def _append_to_vault_file(vault_relative_path: str, content: str, today: date) -
     else:
         folder_path, filename = "", parts[0]
 
-    # Resolve folder
+    # Resolve folder (auto-create missing segments)
     if folder_path:
-        folder_id = drive_ops.find_folder_by_path(folder_path)
-        if not folder_id:
-            logger.error("Could not find vault folder: %s", folder_path)
-            return
+        folder_id = drive_ops.find_or_create_folder_by_path(folder_path)
     else:
         folder_id = DRIVE_VAULT_ROOT_FOLDER_ID
 
@@ -373,3 +380,77 @@ def _append_to_vault_file(vault_relative_path: str, content: str, today: date) -
         header = f"# {filename.replace('.md', '')}\n\n"
         drive_ops.create_md_file(folder_id, filename, header + content + "\n")
         logger.info("Created new file: %s", vault_relative_path)
+
+
+def _append_to_screenshot_log(
+    analysis: dict[str, Any],
+    source_filename: str,
+    archived_filename: Optional[str],
+    today: date,
+) -> None:
+    """
+    Append an entry to the Screenshot Log.md file in the vault.
+    Matches the existing Obsidian callout format with date grouping.
+    """
+    log_path = VAULT_PATHS.get("screenshot_log", "Inbox/Screenshot Log.md")
+    parts = log_path.rsplit("/", 1)
+    if len(parts) == 2:
+        folder_path, filename = parts
+    else:
+        folder_path, filename = "", parts[0]
+
+    if folder_path:
+        folder_id = drive_ops.find_or_create_folder_by_path(folder_path)
+    else:
+        folder_id = DRIVE_VAULT_ROOT_FOLDER_ID
+
+    existing = drive_ops.find_file_by_name(filename, folder_id)
+    if not existing:
+        logger.warning("Screenshot Log file not found: %s", log_path)
+        return
+
+    summary = analysis.get("summary", "Screenshot")
+    items = analysis.get("items", [])
+    item_types = [i.get("type", "?") for i in items]
+    types_str = ", ".join(item_types) if item_types else "no items"
+
+    # Build the callout entry
+    lines = []
+    lines.append(f"> [!example]- {summary}")
+    if archived_filename:
+        lines.append(f"> ![[Inbox/Screenshots/Archive/{archived_filename}|500]]")
+    if items:
+        for item in items:
+            item_type = item.get("type", "?")
+            content = item.get("content", "")
+            lines.append(f"> **[{item_type}]** {content}")
+    lines.append(f"> _Source: {source_filename} — Types: {types_str}_")
+    entry = "\n".join(lines)
+
+    # Read current log content
+    current = drive_ops.read_md_file(existing["id"])
+
+    # Find or insert date heading
+    date_heading = f"### {today.isoformat()}"
+    if date_heading in current:
+        # Insert after the date heading line
+        idx = current.index(date_heading) + len(date_heading)
+        if idx < len(current) and current[idx] == "\n":
+            idx += 1
+        updated = current[:idx] + "\n" + entry + "\n" + current[idx:]
+    else:
+        # Insert a new date heading after "## 🖼️ Recent Screenshots"
+        marker = "## 🖼️ Recent Screenshots"
+        if marker in current:
+            idx = current.index(marker) + len(marker)
+            if idx < len(current) and current[idx] == "\n":
+                idx += 1
+            updated = current[:idx] + "\n" + date_heading + "\n\n" + entry + "\n" + current[idx:]
+        else:
+            # Fallback: append at the end
+            if not current.endswith("\n"):
+                current += "\n"
+            updated = current + "\n" + date_heading + "\n\n" + entry + "\n"
+
+    drive_ops._upload_content(existing["id"], updated)
+    print(f"  Screenshot Log: appended entry for '{summary}'", flush=True)

@@ -53,6 +53,7 @@ VAULT_PATHS = {
     "recipes":      "3-Resources/Recipes/Recipes.md",
     "clients":      "2-Areas/Clients",
     "faq":          "2-Areas/Clients/Photography Business Info.md",
+    "screenshot_log": "Inbox/Screenshot Log.md",
 }
 
 # ---------------------------------------------------------------------------

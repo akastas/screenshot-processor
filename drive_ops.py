@@ -273,6 +273,46 @@ def find_folder_by_path(path: str, root_folder_id: Optional[str] = None) -> Opti
     return current
 
 
+def find_or_create_folder_by_path(path: str, root_folder_id: Optional[str] = None) -> str:
+    """
+    Navigate to a folder path, creating any missing segments on the fly.
+    Uses user credentials for folder creation so they're owned by akastas@gmail.com.
+    Returns the final folder ID.
+    """
+    current = root_folder_id or DRIVE_VAULT_ROOT_FOLDER_ID
+    if not current:
+        raise ValueError("DRIVE_VAULT_ROOT_FOLDER_ID is not configured")
+
+    service = _get_service()
+    parts = [p for p in path.split("/") if p]
+
+    for part in parts:
+        escaped = part.replace("'", "\\'")
+        response = (
+            service.files()
+            .list(
+                q=(
+                    f"name = '{escaped}' and '{current}' in parents "
+                    f"and mimeType = 'application/vnd.google-apps.folder' "
+                    f"and trashed = false"
+                ),
+                spaces="drive",
+                fields="files(id)",
+                pageSize=1,
+            )
+            .execute()
+        )
+        files = response.get("files", [])
+        if files:
+            current = files[0]["id"]
+        else:
+            # Create the missing folder using user credentials
+            current = create_folder(current, part)
+            print(f"  Created missing folder: {part}", flush=True)
+
+    return current
+
+
 # ---------------------------------------------------------------------------
 # Download / read
 # ---------------------------------------------------------------------------

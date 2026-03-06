@@ -127,24 +127,24 @@ def _process_single(file_id: str, filename: str, mime_type: str, file_type: str 
         item_types = [i.get("type", "?") for i in items]
         print(f"Analysis: {analysis.get('summary', '')} | Items: {item_types}", flush=True)
 
-    # 3. Route items to Obsidian vault files (also handles TickTick + bookings)
+    # 3. Compute archive filename
     today = date.today()
-    counts = markdown_router.route_items(analysis, filename, today)
-    print(f"Routed: {counts}", flush=True)
-
-    # 4. Create analysis record in archive
-    analysis_file_id = markdown_router.create_analysis_record(
-        analysis, filename, DRIVE_ARCHIVE_FOLDER_ID
-    )
-
-    # 5. Rename the file with a descriptive name
     suggested = analysis.get("filename_suggestion", "processed")
     ext = filename.rsplit(".", 1)[-1] if "." in filename else ("md" if file_type == "text" else "png")
     new_name = f"{today.isoformat()}-{suggested}.{ext}"
-    drive_ops.rename_file(file_id, new_name)
 
-    # 6. Move original file to archive
+    # 4. Rename and move to archive BEFORE routing (so Screenshot Log can embed the archive path)
+    drive_ops.rename_file(file_id, new_name)
     drive_ops.move_file(file_id, DRIVE_ARCHIVE_FOLDER_ID)
+
+    # 5. Route items to Obsidian vault files (also handles TickTick + bookings + Screenshot Log)
+    counts = markdown_router.route_items(analysis, filename, today, archived_filename=new_name)
+    print(f"Routed: {counts}", flush=True)
+
+    # 6. Create analysis record in archive
+    analysis_file_id = markdown_router.create_analysis_record(
+        analysis, filename, DRIVE_ARCHIVE_FOLDER_ID
+    )
 
     result = {
         "original_name": filename,
